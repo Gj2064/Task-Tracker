@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +21,12 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/backend:latest .
           docker push ${{ secrets.DOCKER_USERNAME }}/backend:latest
 
-      - name: Deploy to EC2 and Run Docker Compose
+  deploy:
+    needs: build-and-push  # Ensure deployment runs after building
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH into EC2 and Deploy with Docker Compose
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -29,6 +34,23 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/docker_compose
-            docker pull ${{ secrets.DOCKER_USERNAME }}/backend:latest
-            docker stop backend || true && docker rm backend || true
-            docker run -d --name backend -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/backend:latest
+            
+            # Ensure latest docker-compose file is present
+            git pull origin main || true  # If using a separate repo for compose
+            
+            # Give proper permissions
+            chmod +x docker-compose.yml || true
+            
+            # Pull latest images
+            docker pull garimajain2064/backend:latest
+            docker pull garimajain2064/frontend:latest
+            
+            # Stop & Remove existing containers to prevent conflicts
+            docker stop backend frontend mongo || true
+            docker rm backend frontend mongo || true
+            
+            # Pull latest images for all services in docker-compose
+            docker-compose pull
+            
+            # Start containers with the latest images
+            docker-compose up -d --force-recreate
