@@ -29,6 +29,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/docker_compose
-            git pull origin main  # If stored in a separate repo
             docker pull ${{ secrets.DOCKER_USERNAME }}/backend:latest
-            docker-compose up -d
+            docker stop backend || true && docker rm backend || true
+            docker run -d --name backend -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/backend:latest
